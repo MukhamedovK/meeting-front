@@ -46,7 +46,7 @@ const HomePage = () => {
               onChange={(e) => setRoomId(e.target.value)}
             />
             <button
-              className="btn btn-secondary w-48"
+              className="btn bg-red-500 w-48"
               onClick={handleJoinRoom}
             >
               Join Room
