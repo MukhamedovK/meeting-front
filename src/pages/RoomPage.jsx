@@ -2,10 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   FaVideo,
-  FaMicrophoneAltSlash,
   FaVideoSlash,
   FaPhoneSlash,
-  FaInfoCircle,
 } from "react-icons/fa";
 import { MdMic, MdMicOff } from "react-icons/md";
 import io from "socket.io-client";
@@ -68,8 +66,8 @@ const RoomPage = () => {
     peerConnectionRef.current.onicecandidate = (event) => {
       if (event.candidate) {
         socket.current.emit("signal", {
-          roomId,
           signal: { candidate: event.candidate },
+          recipient: socket.current.id,
         });
       }
     };
@@ -82,38 +80,30 @@ const RoomPage = () => {
           peerConnectionRef.current.addTrack(track, stream);
         });
 
-        socket.current.on("signal", ({ signal }) => {
+        socket.current.on("signal", ({ signal, sender }) => {
           if (signal.offer) {
-            peerConnectionRef.current.setRemoteDescription(
-              new RTCSessionDescription(signal.offer)
-            );
             peerConnectionRef.current
-              .createAnswer()
+              .setRemoteDescription(new RTCSessionDescription(signal.offer))
+              .then(() => peerConnectionRef.current.createAnswer())
               .then((answer) => {
                 peerConnectionRef.current.setLocalDescription(answer);
-                socket.current.emit("signal", {
-                  roomId,
-                  signal: { answer },
-                });
+                socket.current.emit("signal", { signal: { answer }, recipient: sender });
               });
           } else if (signal.answer) {
-            peerConnectionRef.current.setRemoteDescription(
-              new RTCSessionDescription(signal.answer)
-            );
+            peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(signal.answer));
           } else if (signal.candidate) {
-            peerConnectionRef.current.addIceCandidate(
-              new RTCIceCandidate(signal.candidate)
-            );
+            peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
           }
         });
+        
 
         peerConnectionRef.current
           .createOffer()
           .then((offer) => {
             peerConnectionRef.current.setLocalDescription(offer);
             socket.current.emit("signal", {
-              roomId,
               signal: { offer },
+              recipient: socket.current.id,
             });
           });
       })
