@@ -9,64 +9,45 @@ const RoomPage = () => {
   const localStreamRef = useRef(null);
   const remoteStreamRef = useRef(null);
   const peerConnections = useRef({});
-
+  
   useEffect(() => {
-    let localStream;
-
-    // Get user media
     navigator.mediaDevices
       .getUserMedia({ audio: true })
       .then((stream) => {
-        localStream = stream;
         localStreamRef.current.srcObject = stream;
-
-        // Notify server to join room
         socket.emit("join-room", roomId);
 
         socket.on("user-joined", (userId) => {
-          console.log("User joined:", userId);
           const peerConnection = createPeerConnection(userId, stream);
           peerConnections.current[userId] = peerConnection;
         });
 
-        socket.on("signal", async ({ signal, sender }) => {
+        socket.on("signal", ({ signal, sender }) => {
           const peerConnection = peerConnections.current[sender];
           if (peerConnection) {
-            try {
-              if (signal.type === "offer") {
-                await peerConnection.setRemoteDescription(
-                  new RTCSessionDescription(signal)
-                );
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                socket.emit("signal", {
-                  roomId,
-                  signal: answer,
-                  sender: socket.id,
-                });
-              } else if (signal.type === "answer") {
-                await peerConnection.setRemoteDescription(
-                  new RTCSessionDescription(signal)
-                );
-              } else if (signal.candidate) {
-                await peerConnection.addIceCandidate(new RTCIceCandidate(signal));
-              }
-            } catch (error) {
-              console.error("Error handling signal:", error);
+            peerConnection.setRemoteDescription(
+              new RTCSessionDescription(signal)
+            );
+            if (signal.type === "offer") {
+              peerConnection
+                .createAnswer()
+                .then((answer) => {
+                  peerConnection.setLocalDescription(answer);
+                  socket.emit("signal", {
+                    roomId,
+                    signal: answer,
+                    sender: socket.id,
+                  });
+                })
+                .catch(console.error);
             }
           }
         });
       })
-      .catch((error) => {
-        console.error("Error accessing media devices:", error);
-      });
+      .catch((err) => alert("Failed to access microphone: " + err.message));
 
     return () => {
-      // Clean up peer connections and streams
       Object.values(peerConnections.current).forEach((pc) => pc.close());
-      if (localStream) {
-        localStream.getTracks().forEach((track) => track.stop());
-      }
       socket.disconnect();
     };
   }, [roomId]);
@@ -85,11 +66,7 @@ const RoomPage = () => {
     };
 
     peerConnection.ontrack = (event) => {
-      console.log("Receiving track");
       remoteStreamRef.current.srcObject = event.streams[0];
-      remoteStreamRef.current.play().catch((error) => {
-        console.error("Error playing remote stream:", error);
-      });
     };
 
     stream.getTracks().forEach((track) => {
@@ -106,7 +83,7 @@ const RoomPage = () => {
           sender: socket.id,
         });
       })
-      .catch((error) => console.error("Error creating offer:", error));
+      .catch(console.error);
 
     return peerConnection;
   };
@@ -116,7 +93,7 @@ const RoomPage = () => {
       <h1 className="text-xl font-bold mb-4">Room: {roomId}</h1>
       <div className="flex space-x-4">
         <audio ref={localStreamRef} autoPlay muted className="w-48" />
-        <audio ref={remoteStreamRef} autoPlay className="w-48" />
+        <audio ref={remoteStreamRef} autoPlay controls className="w-48" />
       </div>
     </div>
   );
