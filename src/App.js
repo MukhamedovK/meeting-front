@@ -1,7 +1,17 @@
 import React, { useEffect, useRef } from "react";
 import io from "socket.io-client";
 
-const socket = io("https://meeting-server-kv18.onrender.com");
+const socket = io("https://your-render-backend.onrender.com", {
+  transports: ["websocket", "polling"],
+});
+
+socket.on("connect", () => {
+  console.log("Connected to server", socket.id);
+});
+
+socket.on("disconnect", () => {
+  console.log("Disconnected from server");
+});
 
 const App = () => {
   const localStreamRef = useRef(null);
@@ -28,20 +38,19 @@ const App = () => {
         socket.on("signal", ({ signal, sender }) => {
           const peerConnection = peerConnections.current[sender];
           if (peerConnection) {
-            peerConnection.setRemoteDescription(
-              new RTCSessionDescription(signal)
-            );
+            peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
             if (signal.type === "offer") {
               peerConnection
                 .createAnswer()
                 .then((answer) => {
                   peerConnection.setLocalDescription(answer);
-                  socket.emit("signal", {
-                    signal: answer,
-                    sender: socket.id,
-                  });
+                  socket.emit("signal", { signal: answer, sender: socket.id });
                 })
                 .catch(console.error);
+            } else if (signal.type === "answer") {
+              peerConnection.setLocalDescription(signal);
+            } else if (signal.type === "candidate") {
+              peerConnection.addIceCandidate(new RTCIceCandidate(signal));
             }
           }
         });
